@@ -23,9 +23,8 @@ try:
             return typing.get_origin(tp) is Union and type(None) in typing.get_args(tp)
 
         def __init__(self, **kwargs):
-            for key, type_ in DjangoCarinaDatabaseSettings.__dict__[
-                "__annotations__"
-            ].items():
+            annotations = getattr(DjangoCarinaDatabaseSettings, "__annotations__", {})
+            for key, type_ in annotations.items():
                 if not self.is_optional(type_) and not hasattr(
                     DjangoCarinaDatabaseSettings, key
                 ):
