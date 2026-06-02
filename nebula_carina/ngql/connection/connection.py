@@ -14,6 +14,7 @@ from nebula_carina.settings import database_settings
 config = Config()
 config.max_connection_pool_size = database_settings.max_connection_pool_size
 connection_pool = ConnectionPool()
+_pool_initialized = False
 
 
 def _split(server_address: str) -> tuple[str, int]:
@@ -21,8 +22,14 @@ def _split(server_address: str) -> tuple[str, int]:
     return ip, int(port)
 
 
-if not connection_pool.init([_split(i) for i in database_settings.servers], config):
-    raise RuntimeError('Cannot connect to the connection pool')
+def ensure_pool_initialized() -> None:
+    # Lazy initialization: connect to the graph database on first session use, not at module import.
+    global _pool_initialized
+    if _pool_initialized:
+        return
+    if not connection_pool.init([_split(i) for i in database_settings.servers], config):
+        raise RuntimeError('Cannot connect to the connection pool')
+    _pool_initialized = True
 
 
 class LocalSession(object):
@@ -44,6 +51,7 @@ class LocalSession(object):
         return self._main_session
 
     def create_session(self):
+        ensure_pool_initialized()
         self._main_session = connection_pool.get_session(
             user_name=database_settings.user_name, password=database_settings.password
         )
