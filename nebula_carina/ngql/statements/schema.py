@@ -47,6 +47,58 @@ class Ttl(Statement):
         return f'TTL_DURATION = {self.ttl_duration}{ttl_col}'
 
 
+class IndexField(Statement):
+    """A single property within an index.
+
+    ``length`` is required by NebulaGraph for variable-length ``string`` columns
+    and optional (up to the declared length) for ``fixed_string`` columns; it
+    must be omitted for every other data type.
+    """
+    __slots__ = ('prop_name', 'length')
+
+    def __init__(self, prop_name: str, length: int | None = None):
+        self.prop_name = prop_name
+        self.length = length
+
+    def __str__(self):
+        return f'{self.prop_name}({self.length})' if self.length else self.prop_name
+
+
+class Index(Statement):
+    """An index declaration for a TAG or EDGE type.
+
+    ``fields`` accepts property names (``str``), ``(name, length)`` tuples, or
+    :class:`IndexField` instances. An empty ``fields`` list builds an index over
+    the schema itself, which is what enables full ``MATCH`` / ``LOOKUP`` scans
+    that carry no property predicate.
+    """
+    __slots__ = ('name', 'fields', 'comment')
+
+    def __init__(
+            self, fields: list, *, name: str | None = None, comment: str | None = None
+    ):
+        self.fields = [
+            f if isinstance(f, IndexField)
+            else IndexField(*f) if isinstance(f, (tuple, list))
+            else IndexField(f)
+            for f in fields
+        ]
+        self.name = name
+        self.comment = comment
+
+    def get_name(self, schema_name: str) -> str:
+        if self.name:
+            return self.name
+        suffix = '_'.join(f.prop_name for f in self.fields)
+        return f'i_{schema_name}_{suffix}' if suffix else f'i_{schema_name}'
+
+    def field_names(self) -> list[str]:
+        return [f.prop_name for f in self.fields]
+
+    def __str__(self):
+        return f'({", ".join(str(f) for f in self.fields)})'
+
+
 class Alter(Statement):
     __slots__ = ('alter_definition_type', 'properties', 'prop_names')
 

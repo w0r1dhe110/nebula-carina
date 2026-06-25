@@ -34,10 +34,15 @@ from nebula_carina.ngql.schema.schema import (
     create_schema_ngql,
     describe_schema,
     alter_schema_ngql,
+    create_index_ngql,
+    drop_index_ngql,
+    rebuild_index_ngql,
+    show_indexes,
+    describe_index,
 )
 from nebula_carina.ngql.statements.clauses import Limit
 from nebula_carina.ngql.statements.edge import EdgeDefinition, EdgeValue
-from nebula_carina.ngql.statements.schema import AlterType, SchemaType
+from nebula_carina.ngql.statements.schema import AlterType, Index, IndexField, SchemaType
 from nebula_carina.ngql.record.vertex import (
     insert_vertex_ngql,
     update_vertex_ngql,
@@ -144,6 +149,43 @@ class NebulaSchemaModel(BaseModel, metaclass=NebulaSchemaModelMetaClass):
                 alter_definitions=alter_definitions,
             )
         return None
+
+    @classmethod
+    def get_indexes(cls) -> list[Index]:
+        """indexes declared in the model's ``Meta.indexes`` (empty if none)"""
+        meta_cls = getattr(cls, "Meta", None)
+        return list(getattr(meta_cls, "indexes", None) or []) if meta_cls else []
+
+    @classmethod
+    def index_migration_ngqls(cls) -> list[str]:
+        """Diff declared indexes against the database, return the ngqls to sync.
+
+        Newly declared indexes are created and rebuilt; an index whose declared
+        columns differ from the database is dropped and recreated. Indexes that
+        exist in the database but are not declared on the model are left intact,
+        so manually-created indexes are never dropped. Only indexes matched by
+        the names declared on the model are managed.
+
+        Note: NebulaGraph propagates schema/index DDL asynchronously, so for a
+        brand-new tag/edge the CREATE INDEX / REBUILD may need a moment to settle.
+        """
+        indexes = cls.get_indexes()
+        if not indexes:
+            return []
+        schema_type = cls.get_schema_type()
+        schema_name = cls.db_name()
+        existing = show_indexes(schema_type)
+        ngql_list = []
+        for index in indexes:
+            name = index.get_name(schema_name)
+            if name not in existing:
+                ngql_list.append(create_index_ngql(schema_type, schema_name, index))
+                ngql_list.append(rebuild_index_ngql(schema_type, name))
+            elif describe_index(schema_type, name) != index.field_names():
+                ngql_list.append(drop_index_ngql(schema_type, name))
+                ngql_list.append(create_index_ngql(schema_type, schema_name, index))
+                ngql_list.append(rebuild_index_ngql(schema_type, name))
+        return ngql_list
 
 
 class TagModel(NebulaSchemaModel):

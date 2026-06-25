@@ -131,6 +131,37 @@ class Support(models.EdgeTypeModel):
     food_amount: int = _(data_types.Int16, ..., )
 ```
 
+#### Indexes
+Declare indexes on a `TagModel` / `EdgeTypeModel` through `Meta.indexes`. NebulaGraph
+requires an index before you can run a `MATCH` / `LOOKUP` that scans a tag/edge or
+filters by a property, so this is how you make those queries work.
+
+```python
+from nebula_carina.models import models
+from nebula_carina.models.fields import create_nebula_field as _
+from nebula_carina.ngql.schema import data_types
+from nebula_carina.ngql.statements.schema import Index
+
+
+class Figure(models.TagModel):
+    name: str = _(data_types.FixedString(30), ..., )
+    age: int = _(data_types.Int16, ..., )
+    is_virtual: bool = _(data_types.Bool, True)
+
+    class Meta:
+        indexes = [
+            Index([]),                                   # index the tag itself -> enables full scans
+            Index(['is_virtual']),                       # single property index
+            Index([('name', 10)], name='figure_name'),   # (fixed_)string columns need a length
+        ]
+```
+
+* `fields` accepts property names, `(name, length)` tuples, or `Index([...])` with `IndexField` instances. A `string` column must specify a length; a `fixed_string` column may.
+* An empty `fields` list (`Index([])`) builds an index over the schema itself — this is what lets `MATCH (v:figure)` / `LOOKUP ON figure` run without a property predicate.
+* `name` is optional; when omitted it defaults to `i_<schema>_<fields>` (or `i_<schema>` for a schema-only index).
+
+`make_migrations` / `migrate` (and `python manage.py nebulamigrate`) pick these up: missing indexes are created and rebuilt, and an index whose declared columns changed is dropped and recreated. Indexes that exist in the database but are not declared on a model are left untouched, so manually-created indexes are never dropped. Index DDL is emitted after all tag/edge DDL; because NebulaGraph propagates schema changes asynchronously, a brand-new tag plus its index may need a moment to settle.
+
 #### Data Models
 * An VertexModel is used to define a nebula vertex. It does nothing to the schema.
 
@@ -330,7 +361,7 @@ Flask usage is quite similar to the Django usage. Basically use `.dict()` functi
 
 
 ## TODO List
-- [ ] Indexes
+- [x] Indexes
 - [ ] TTL on schema
 - [ ] Go / Fetch / Lookup statements
 - [x] Session / Connection Pool (partially, might implement a better one later base on nebula-python)

@@ -2,7 +2,7 @@ from typing import Optional
 
 from nebula_carina.ngql.connection.connection import run_ngql
 from nebula_carina.ngql.schema.data_types import string_to_data_type
-from nebula_carina.ngql.statements.schema import Alter, Ttl, SchemaType, SchemaField
+from nebula_carina.ngql.statements.schema import Alter, Index, Ttl, SchemaType, SchemaField
 from nebula_carina.utils.utils import read_str
 
 
@@ -115,3 +115,38 @@ def alter_edge_ngql(
     return alter_schema_ngql(
         SchemaType.EDGE, edge_name, alter_definitions=alter_definitions, ttl_definition=ttl_definition
     )
+
+
+# ---- indexes ----
+
+def create_index_ngql(
+        schema: SchemaType, schema_name: str, index: Index, *, if_not_exists: bool = True
+) -> str:
+    comment = f' COMMENT "{index.comment}"' if index.comment else ''
+    return f'CREATE {schema.value} INDEX{" IF NOT EXISTS" if if_not_exists else ""} ' \
+           f'{index.get_name(schema_name)} ON {schema_name}{str(index)}{comment};'
+
+
+def drop_index_ngql(schema: SchemaType, index_name: str, *, if_exists: bool = True) -> str:
+    return f'DROP {schema.value} INDEX{" IF EXISTS" if if_exists else ""} {index_name};'
+
+
+def rebuild_index_ngql(schema: SchemaType, index_names: str | list[str]) -> str:
+    names = index_names if isinstance(index_names, str) else ', '.join(index_names)
+    return f'REBUILD {schema.value} INDEX {names};'
+
+
+def show_indexes(schema: SchemaType) -> dict[str, str]:
+    """return {index name: the tag/edge it is built on} for the current space"""
+    rs = run_ngql(f'SHOW {schema.value} INDEXES;')
+    by_column = 'By Tag' if schema == SchemaType.TAG else 'By Edge'
+    return {
+        read_str(name.value): read_str(by.value)
+        for name, by in zip(rs.column_values('Index Name'), rs.column_values(by_column))
+    }
+
+
+def describe_index(schema: SchemaType, index_name: str) -> list[str]:
+    """return the ordered field names covered by an existing index"""
+    rs = run_ngql(f'DESCRIBE {schema.value} INDEX {index_name};')
+    return [read_str(v.value) for v in rs.column_values('Field')]
