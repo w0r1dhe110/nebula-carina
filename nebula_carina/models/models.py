@@ -39,6 +39,7 @@ from nebula_carina.ngql.schema.schema import (
     rebuild_index_ngql,
     show_indexes,
     describe_index,
+    show_index_status,
 )
 from nebula_carina.ngql.statements.clauses import Limit
 from nebula_carina.ngql.statements.edge import EdgeDefinition, EdgeValue
@@ -175,6 +176,7 @@ class NebulaSchemaModel(BaseModel, metaclass=NebulaSchemaModelMetaClass):
         schema_type = cls.get_schema_type()
         schema_name = cls.db_name()
         existing = show_indexes(schema_type)
+        status = None  # lazily fetched: only needed to inspect existing indexes
         ngql_list = []
         for index in indexes:
             name = index.get_name(schema_name)
@@ -185,6 +187,13 @@ class NebulaSchemaModel(BaseModel, metaclass=NebulaSchemaModelMetaClass):
                 ngql_list.append(drop_index_ngql(schema_type, name))
                 ngql_list.append(create_index_ngql(schema_type, schema_name, index))
                 ngql_list.append(rebuild_index_ngql(schema_type, name))
+            else:
+                # the index already exists with the right columns; rebuild it if it
+                # was never (successfully) built, so a half-applied migration heals
+                if status is None:
+                    status = show_index_status(schema_type)
+                if status.get(name) != 'FINISHED':
+                    ngql_list.append(rebuild_index_ngql(schema_type, name))
         return ngql_list
 
 

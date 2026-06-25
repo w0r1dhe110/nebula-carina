@@ -150,3 +150,16 @@ def describe_index(schema: SchemaType, index_name: str) -> list[str]:
     """return the ordered field names covered by an existing index"""
     rs = run_ngql(f'DESCRIBE {schema.value} INDEX {index_name};')
     return [read_str(v.value) for v in rs.column_values('Field')]
+
+
+def show_index_status(schema: SchemaType) -> dict[str, str]:
+    """return {index name: build status} (e.g. 'FINISHED') for the current space.
+
+    An index that has never been rebuilt does not index pre-existing data; this is
+    how callers tell a created-but-not-rebuilt index from a fully-built one.
+    """
+    rs = run_ngql(f'SHOW {schema.value} INDEX STATUS;')
+    return {
+        read_str(name.value): read_str(status.value)
+        for name, status in zip(rs.column_values('Name'), rs.column_values('Index Status'))
+    }
