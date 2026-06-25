@@ -141,7 +141,7 @@ def show_indexes(schema: SchemaType) -> dict[str, str]:
     rs = run_ngql(f'SHOW {schema.value} INDEXES;')
     by_column = 'By Tag' if schema == SchemaType.TAG else 'By Edge'
     return {
-        read_str(name.value): read_str(by.value)
+        name.as_string(): by.as_string()
         for name, by in zip(rs.column_values('Index Name'), rs.column_values(by_column))
     }
 
@@ -149,7 +149,7 @@ def show_indexes(schema: SchemaType) -> dict[str, str]:
 def describe_index(schema: SchemaType, index_name: str) -> list[str]:
     """return the ordered field names covered by an existing index"""
     rs = run_ngql(f'DESCRIBE {schema.value} INDEX {index_name};')
-    return [read_str(v.value) for v in rs.column_values('Field')]
+    return [v.as_string() for v in rs.column_values('Field')]
 
 
 def show_index_status(schema: SchemaType) -> dict[str, str]:
@@ -160,6 +160,6 @@ def show_index_status(schema: SchemaType) -> dict[str, str]:
     """
     rs = run_ngql(f'SHOW {schema.value} INDEX STATUS;')
     return {
-        read_str(name.value): read_str(status.value)
+        name.as_string(): status.as_string()
         for name, status in zip(rs.column_values('Name'), rs.column_values('Index Status'))
     }
