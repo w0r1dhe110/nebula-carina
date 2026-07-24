@@ -242,6 +242,18 @@ def ttype2python_value(val:  any):
     return (ttype2data_type[type(val)] if type(val) in ttype2data_type else DataType).ttype2python_type(val)
 
 
+def value2python(value: ttypes.Value) -> any:
+    """thrift Value → Python 值，NULL / EMPTY 归一为 None。
+
+    Nebula 的 NULL 走 union 的 nVal 字段（I32 枚举，NullType.__NULL__ == 0），
+    直接取 .value 会得到 int 0 并被误当成有效值。官方的
+    ValueWrapper.cast_primitive() 同样靠 getType() 判断，这里保持一致。
+    """
+    if value.getType() in (ttypes.Value.__EMPTY__, ttypes.Value.NVAL):
+        return None
+    return ttype2python_value(value.value)
+
+
 def auto_convert_value_to_db_str(val: any):
     if isinstance(val, list):
         return f'[{", ".join([auto_convert_value_to_db_str(i) for i in val])}]'
