@@ -27,7 +27,7 @@ from nebula_carina.ngql.record.edge import (
     insert_edge_ngql,
     upsert_edge_ngql,
 )
-from nebula_carina.ngql.schema.data_types import ttype2python_value
+from nebula_carina.ngql.schema.data_types import ttype2python_value, value2python
 from nebula_carina.ngql.schema.schema import (
     Ttl,
     Alter,
@@ -202,7 +202,7 @@ class TagModel(NebulaSchemaModel):
     def from_tag(cls, tag: Tag):
         return cls(
             **{
-                read_str(prop): ttype2python_value(value.value)
+                read_str(prop): value2python(value)
                 for prop, value in tag.props.items()
             }
         )
@@ -219,7 +219,7 @@ class EdgeTypeModel(NebulaSchemaModel):
     @classmethod
     def from_props(cls, props: dict[str, any]):
         return cls(
-            **{read_str(prop): read_str(value.value) for prop, value in props.items()}
+            **{read_str(prop): value2python(value) for prop, value in props.items()}
         )
 
     @classmethod
